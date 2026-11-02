@@ -1,0 +1,182 @@
+name: rustdesk
+icon: rustdesk
+type: service
+title: RustDesk Server
+guidance: GUIDANCE.md
+# The ID server keeps devices and their sign-in state in memory and in one SQLite file, and the relay pairs both
+# sides of a session in the same process.
+scalable: false
+
+options:
+- version: '1'
+  tag: 1-r0
+  default: true
+
+labels:
+- rustdesk
+- remote-desktop
+
+deployment:
+  strategy: rolling
+  shutdownGracePeriod: 30s
+
+# Devices reach the ID server and the relay on published ports. Publish id and id-udp together: devices use one
+# address and port for both, so they need the same public number. The http port gives the server a domain, which
+# devices can use as the host in the ID and relay server addresses.
+endpoints:
+- name: rustdesk
+  ports:
+  - name: http
+    number: 8080
+    protocol: http
+    main: true
+    routeDefaults:
+      https_redirect: 'true'
+      # Clients with "Use WebSocket" turned on keep long-lived connections open on /ws/id and /ws/relay.
+      request_timeout: 0s
+      backend_request_timeout: 0s
+  - name: id
+    number: 21116
+    protocol: tcp
+  - name: id-udp
+    number: 21116
+    protocol: udp
+  - name: relay
+    number: 21117
+    protocol: tcp
+  - name: nat
+    number: 21115
+    protocol: tcp
+
+env:
+# The address devices use, shown by the "Show client settings" action. The ID server also tells devices where the
+# relay is. Publishing or unpublishing a port asks for a redeploy so these stay current.
+- name: RUSTDESK_HOST
+  value: '{{service.primaryHost}}'
+- name: RUSTDESK_ID_PORT
+  value: '{{service.endpoints.rustdesk.ports.id.publicPort}}'
+- name: RUSTDESK_RELAY_PORT
+  value: '{{service.endpoints.rustdesk.ports.relay.publicPort}}'
+# Behind Wodby's gateway every device reaches the server from the gateway's address, so devices can't find each
+# other directly. Sessions always go through the relay.
+- name: ALWAYS_USE_RELAY
+  value: 'Y'
+
+actions:
+- name: client_settings
+  title: Show client settings
+  type: button
+  args:
+  - rustdesk-client-settings
+
+volumes:
+- name: data
+  title: Data
+  size: 1
+  helm:
+    labels: persistence.labels
+    values:
+    - name: persistence.enabled
+      value: true
+    - name: persistence.size
+      value: '{{volumes.data.size}}Gi'
+    - name: persistence.storageClass
+      value: '{{volumes.data.storageClassName}}'
+
+helm:
+  name: wodby
+  source: oci://registry-1.docker.io/wodby/stateful
+  chart: oci://registry-1.docker.io/wodby/stateful
+  version: 0.2.0
+  valueMappings:
+    replicas: replicaCount
+    serviceAccountName: serviceAccount.name
+    serviceAccountCreate: serviceAccount.create
+  values:
+  - name: containerName
+    value: rustdesk
+  - name: containerPorts
+    value:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+    - name: id
+      containerPort: 21116
+      protocol: TCP
+    - name: id-udp
+      containerPort: 21116
+      protocol: UDP
+    - name: relay
+      containerPort: 21117
+      protocol: TCP
+    - name: nat
+      containerPort: 21115
+      protocol: TCP
+  - name: podSecurityContext
+    value:
+      fsGroup: 1000
+      fsGroupChangePolicy: OnRootMismatch
+  - name: securityContext
+    value:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      runAsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 1000
+  - name: startupProbe
+    value:
+      tcpSocket:
+        port: relay
+      failureThreshold: 30
+      periodSeconds: 2
+      timeoutSeconds: 2
+  # The container exits when the ID server or the relay stops, so checking the relay port and the status page is
+  # enough.
+  - name: readinessProbe
+    value:
+      tcpSocket:
+        port: relay
+      failureThreshold: 3
+      periodSeconds: 10
+      timeoutSeconds: 5
+  - name: livenessProbe
+    value:
+      httpGet:
+        path: /healthz
+        port: http
+      failureThreshold: 6
+      periodSeconds: 10
+      timeoutSeconds: 5
+
+workloads:
+- name: main
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: '{{helm.release}}'
+  kind: statefulset
+  primary: true
+  helm:
+    labels: commonLabels
+    annotations: commonAnnotations
+    volumes: extraVolumes
+  containers:
+  - name: rustdesk
+    image: wodby/rustdesk
+    resources:
+      request:
+        cpu: 100
+        memory: 128
+      limit:
+        cpu: 2000
+        memory: 1024
+    helm:
+      resources: resources
+      env: envVars
+      mounts: extraVolumeMounts
+      image:
+        repository: image.repository
+        tag: image.tag
+        registry: image.registry
+        pullPolicy: image.pullPolicy
