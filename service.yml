@@ -9,7 +9,7 @@ scalable: false
 
 options:
 - version: '1'
-  tag: 1-r1
+  tag: 1-r2
   default: true
 
 labels:
@@ -20,9 +20,9 @@ deployment:
   strategy: rolling
   shutdownGracePeriod: 30s
 
-# Devices reach the ID server and the relay on published ports. Publish id and id-udp together: devices use one
-# address and port for both, so they need the same public number. The http port gives the server a domain, which
-# devices can use as the host in the ID and relay server addresses.
+# Devices with the RustDesk app's "Use WebSocket" setting reach the ID server and the relay through the http port's
+# domain (/ws/id, /ws/relay). The other ports are optional, for devices without WebSocket on clusters that can publish
+# id and id-udp on one public number: devices use one address and port for both.
 endpoints:
 - name: rustdesk
   ports:
@@ -49,16 +49,17 @@ endpoints:
     protocol: tcp
 
 env:
-# The address devices use, shown by the "Show client settings" action. The ID server also tells devices where the
-# relay is. Publishing or unpublishing a port asks for a redeploy so these stay current.
+# The address devices use, shown by the "Show client settings" action and the status page. With published ports, the
+# ID server also tells devices where the relay is. Publishing or unpublishing a port asks for a redeploy so these
+# stay current.
 - name: RUSTDESK_HOST
   value: '{{service.primaryHost}}'
 - name: RUSTDESK_ID_PORT
   value: '{{service.endpoints.rustdesk.ports.id.publicPort}}'
 - name: RUSTDESK_RELAY_PORT
   value: '{{service.endpoints.rustdesk.ports.relay.publicPort}}'
-# Behind Wodby's gateway every device reaches the server from the gateway's address, so devices can't find each
-# other directly. Sessions always go through the relay.
+# WebSocket sessions always go through the relay. Behind Wodby's gateway, port-based sessions can't connect devices
+# directly either, because every device reaches the server from the gateway's address.
 - name: ALWAYS_USE_RELAY
   value: 'Y'
 
