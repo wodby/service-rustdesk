@@ -1,6 +1,6 @@
 # RustDesk Server on Wodby
 
-What Wodby sets up for the open-source RustDesk server on this service. It runs the `wodby/rustdesk` image: the ID server (`hbbs`) and the relay (`hbbr`) in one container, plus a small web server on port 8080 for the domain's status page.
+What Wodby sets up for the open-source RustDesk server on this service. It runs the `wodby/rustdesk` image: the ID server (`hbbs`) and the relay (`hbbr`) in one container, plus a small web server on port 8080 for the domain's status page, which shows the ID and relay server addresses (not the key) and links to the setup guide.
 
 ## Make it reachable
 
