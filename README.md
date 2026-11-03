@@ -22,7 +22,7 @@ configuration for RustDesk Server.
 | Versions | `1` by default |
 | Workloads | `main` (Statefulset, primary) |
 | Containers | `rustdesk` using `wodby/rustdesk` |
-| Endpoints | `rustdesk`: HTTP 8080 (main), TCP 21116, UDP 21116, TCP 21117, TCP 21115 |
+| Endpoints | `rustdesk`: HTTP 8080 (main, WebSocket and status page); optional TCP 21116, UDP 21116, TCP 21117, TCP 21115 |
 | Service links | None |
 | Application build | Not buildable from application source |
 | Helm | chart `oci://registry-1.docker.io/wodby/stateful`; version `0.2.0` |
@@ -30,16 +30,15 @@ configuration for RustDesk Server.
 
 ## Connect devices
 
-RustDesk devices connect to published TCP and UDP ports, not to the HTTPS domain:
+RustDesk devices connect over WebSocket to the service's main HTTPS domain, so no ports need publishing and it works
+on every cluster:
 
-1. Publish the `id` and `id-udp` ports. They need the same public port number, which Wodby assigns
-   automatically on k3s and single-node clusters.
-2. Publish the `relay` port.
-3. Redeploy the service.
-4. Run the **Show client settings** action and enter the ID server, relay server and key in each RustDesk client
-   under **Settings > Network > ID/Relay server**.
+1. Run the **Show client settings** action.
+2. In the RustDesk app on each device, open **Settings > Network**, turn on **Use WebSocket**, and enter the
+   ID server, API server and key it printed. Leave the relay server empty.
 
-Every session goes through the relay, because the cluster's gateway hides each device's own address.
+Devices can also connect without WebSocket on k3s and single-node clusters: publish the `id`, `id-udp` and `relay`
+ports and redeploy, and the action prints those values too. Every session goes through the relay.
 
 ## Use this service
 
