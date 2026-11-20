@@ -10,6 +10,7 @@ scalable: false
 options:
 - version: '1'
   tag: 1-r2
+  digest: sha256:2d86d870070a9fbdccc824a2c5f81930d75c440957e6ef5e63000a35d4b743f6
   default: true
 
 labels:
